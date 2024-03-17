@@ -5,37 +5,63 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Servidor2 {
 
-    public static void main(String[] args) throws IOException {
+    private static List<Arquivo> arquivos = new ArrayList<>();
+
+    public static void main(String[] args) {
         System.out.println("== Servidor ==");
 
-        // Configurando o socket
-        ServerSocket serverSocket = new ServerSocket(7001);
-        Socket socket = serverSocket.accept();
+        try (ServerSocket serverSocket = new ServerSocket(7001);
+             Socket socket = serverSocket.accept();
+             DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+             DataInputStream dis = new DataInputStream(socket.getInputStream())) {
 
-        // pegando uma referência do canal de saída do socket. Ao escrever nesse canal, está se enviando dados para o
-        // servidor
-        DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-        // pegando uma referência do canal de entrada do socket. Ao ler deste canal, está se recebendo os dados
-        // enviados pelo servidor
-        DataInputStream dis = new DataInputStream(socket.getInputStream());
+            while (true) {
+                System.out.println("Cliente: " + socket.getInetAddress());
 
-        // laço infinito do servidor
-        while (true) {
-            System.out.println("Cliente: " + socket.getInetAddress());
+                String comando = dis.readUTF();
+                String[] partes = comando.split(" ");
 
-            String mensagem = dis.readUTF();
-            System.out.println(mensagem);
-
-            dos.writeUTF("Li sua mensagem: " + mensagem);
+                if (socket.isConnected() && !socket.isClosed()) {
+                    switch (partes[0]) {
+                        case "readdir":
+                        if (arquivos.isEmpty()) {
+                            dos.writeUTF("Sem Arquivos no Momento");
+                        } else {
+                            StringBuilder sb = new StringBuilder();
+                            for (Arquivo arquivo : arquivos) {
+                                sb.append(arquivo.getNome()).append("\n");
+                            }
+                            dos.writeUTF(sb.toString());
+                        }
+                        break;
+                        case "rename":
+                            for (Arquivo arquivo : arquivos) {
+                                if (arquivo.getNome().equals(partes[1])) {
+                                    arquivo.setNome(partes[2]);
+                                    dos.writeUTF("Arquivo renomeado com sucesso.");
+                                    break;
+                                }
+                            }
+                            break;
+                        case "create":
+                            arquivos.add(new Arquivo(partes[1]));
+                            dos.writeUTF("Arquivo criado com sucesso.");
+                            break;
+                        case "remove":
+                            arquivos.removeIf(arquivo -> arquivo.getNome().equals(partes[1]));
+                            dos.writeUTF("Arquivo removido com sucesso.");
+                            break;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro de E/S: " + e.getMessage());
         }
-        /*
-         * Observe o while acima. Perceba que primeiro se lê a mensagem vinda do cliente (linha 29, depois se escreve
-         * (linha 32) no canal de saída do socket. Isso ocorre da forma inversa do que ocorre no while do Cliente2,
-         * pois, de outra forma, daria deadlock (se ambos quiserem ler da entrada ao mesmo tempo, por exemplo,
-         * ninguém evoluiria, já que todos estariam aguardando.
-         */
     }
 }
+
